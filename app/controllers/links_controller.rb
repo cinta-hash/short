@@ -1,78 +1,87 @@
+# app/controllers/links_controller.rb
 class LinksController < ApplicationController
-  before_action :set_link, only: [:show, :edit, :update, :destroy]
+  before_action :set_link, only: %i[show edit update destroy]
   before_action :update_clicks, only: [:show]
 
-  # GET /links or /links.json
   def index
     @links = Link.all
   end
 
-  # GET /links/1 or /links/1.json
   def show
-    if @link
-      redirect_to @link.long_url
-    else
-      render_not_found
-    end
+    redirect_to @link.long_url, allow_other_host: true
   end
 
-  # GET /links/new
   def new
     @link = Link.new
   end
 
-  # GET /links/1/edit
   def edit
   end
 
-  # POST /links or /links.json
   def create
-    @link = Link.find_by(custom_url: link_params[:custom_url])
+    @link = Link.new(link_params)
 
-    if @link
-      render json: { short_url: link_url(@link) }
-    else
-      @link = Link.new(link_params)
+    respond_to do |format|
       if @link.save
-        render json: { short_url: link_url(@link) }, status: :created
+        format.html { redirect_to link_url(@link), notice: 'Link was successfully created.' }
+        format.json { render :show, status: :created, location: @link }
       else
-        render json: @link.errors, status: :unprocessable_entity
+        format.html { render :new, status: :unprocessable_entity }
+        format.json { render json: @link.errors, status: :unprocessable_entity }
       end
     end
   end
 
-  # PATCH/PUT /links/1 or /links/1.json
   def update
-    if @link.update(link_params)
-      render json: @link, status: :ok
-    else
-      render json: @link.errors, status: :unprocessable_entity
+    respond_to do |format|
+      if @link.update(link_params)
+        format.html { redirect_to link_url(@link), notice: 'Link was successfully updated.' }
+        format.json { render :show, status: :ok, location: @link }
+      else
+        format.html { render :edit, status: :unprocessable_entity }
+        format.json { render json: @link.errors, status: :unprocessable_entity }
+      end
     end
   end
 
-  # DELETE /links/1 or /links/1.json
   def destroy
     @link.destroy
-    head :no_content
+
+    respond_to do |format|
+      format.html { redirect_to links_url, notice: 'Link was successfully destroyed.' }
+      format.json { head :no_content }
+    end
+  end
+
+  def redirect
+    @link = Link.find_by_short_url(params[:id])
+    
+    if @link
+      @link.increment!(:clicks) # Increment the clicks count
+      redirect_to @link.long_url, allow_other_host: true
+    else
+      render json: { error: "Short URL not found" }, status: :not_found
+    end
   end
 
   private
 
-  # Use callbacks to share common setup or constraints between actions.
   def set_link
-    @link = Link.find_by(custom_url: params[:id])
+    @link = Link.find_by(id: params[:id])
+  
+    if @link.nil?
+      flash[:error] = "Link not found"
+      redirect_to root_path 
+    end
   end
 
-  # Only allow a list of trusted parameters through.
   def link_params
-    params.require(:link).permit(:custom_url, :long_url)
+    params.require(:link).permit(:long_url)
   end
 
   def update_clicks
-    @link.increment!(:clicks) if @link
-  end
+    return unless @link 
 
-  def render_not_found
-    render file: "#{Rails.root}/public/404.html", layout: false, status: :not_found
+    @link.increment!(:clicks)
   end
 end
