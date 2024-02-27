@@ -1,6 +1,6 @@
 class LinksController < ApplicationController
-  before_action :set_link, only: %i[show edit update destroy]
-  before_action :update_clicks, only: %i[show]
+  before_action :set_link, only: [:show, :edit, :update, :destroy]
+  before_action :update_clicks, only: [:show]
 
   # GET /links or /links.json
   def index
@@ -8,7 +8,13 @@ class LinksController < ApplicationController
   end
 
   # GET /links/1 or /links/1.json
-  def show; end
+  def show
+    if @link
+      redirect_to @link.long_url
+    else
+      render_not_found
+    end
+  end
 
   # GET /links/new
   def new
@@ -16,51 +22,45 @@ class LinksController < ApplicationController
   end
 
   # GET /links/1/edit
-  def edit; end
+  def edit
+  end
 
   # POST /links or /links.json
   def create
-    @link = Link.new(link_params)
+    @link = Link.find_by(custom_url: link_params[:custom_url])
 
-    respond_to do |format|
+    if @link
+      render json: { short_url: link_url(@link) }
+    else
+      @link = Link.new(link_params)
       if @link.save
-        format.html { redirect_to link_url(@link), notice: 'Link was successfully created.' }
-        format.json { render :show, status: :created, location: @link }
+        render json: { short_url: link_url(@link) }, status: :created
       else
-        format.html { render :new, status: :unprocessable_entity }
-        format.json { render json: @link.errors, status: :unprocessable_entity }
+        render json: @link.errors, status: :unprocessable_entity
       end
     end
   end
 
   # PATCH/PUT /links/1 or /links/1.json
   def update
-    respond_to do |format|
-      if @link.update(link_params)
-        format.html { redirect_to link_url(@link), notice: 'Link was successfully updated.' }
-        format.json { render :show, status: :ok, location: @link }
-      else
-        format.html { render :edit, status: :unprocessable_entity }
-        format.json { render json: @link.errors, status: :unprocessable_entity }
-      end
+    if @link.update(link_params)
+      render json: @link, status: :ok
+    else
+      render json: @link.errors, status: :unprocessable_entity
     end
   end
 
   # DELETE /links/1 or /links/1.json
   def destroy
-    @link.destroy!
-
-    respond_to do |format|
-      format.html { redirect_to links_url, notice: 'Link was successfully destroyed.' }
-      format.json { head :no_content }
-    end
+    @link.destroy
+    head :no_content
   end
 
   private
 
   # Use callbacks to share common setup or constraints between actions.
   def set_link
-    @link = Link.find(params[:id])
+    @link = Link.find_by(custom_url: params[:id])
   end
 
   # Only allow a list of trusted parameters through.
@@ -69,6 +69,10 @@ class LinksController < ApplicationController
   end
 
   def update_clicks
-    @link.increment!(:clicks)
+    @link.increment!(:clicks) if @link
+  end
+
+  def render_not_found
+    render file: "#{Rails.root}/public/404.html", layout: false, status: :not_found
   end
 end
